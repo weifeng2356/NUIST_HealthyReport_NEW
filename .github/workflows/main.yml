@@ -1,9 +1,5 @@
 name: GitHub Actions Auto Health Report
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
   # Run script on daily 7am
   schedule:
     - cron: '0 23 * * *'
