@@ -173,7 +173,7 @@ def message_push(data, result):
 def main():
     parser = argparse.ArgumentParser(description="NUIST健康日报自动填写")
     parser.add_argument(
-        '-m', '--mode', help='用户名/密码读取方式。file选项为读取当前目录下user_data.json, manual选项为手动填写。默认为file模式', default='file')
+        '-m', '--mode', help='用户名/密码读取方式。file选项为读取当前目录下user_data.json, manual选项为手动填写，actions选项为部署至Github Actions时使用。默认为file模式', default='file')
     parser.add_argument('-u', '--username', help='一卡通/校园门户用户名，默认为学号')
     parser.add_argument('-p', '--password', help='一卡通/校园门户密码')
 
@@ -210,6 +210,10 @@ def main():
         username = str(arg.username.strip())
         password = str(arg.password.strip())
 
+    elif mode == 'actions':
+        username = os.environ['USERNAME']
+        password = os.environ['PASSWORD']
+
     if username == None or username == "" or password == None or password == "":
         print(f"\033[31m请正确填写账号密码(当前模式为{mode})\033[01m")
         exit(0)
@@ -221,9 +225,9 @@ def main():
     del arg.password
 
     if result['result_code'] == 200:
-        print(f"\033[32m{result['result_msg']['USER_ID']}打卡成功！\033[01m")
+        print(f"\033[32m打卡成功！\033[01m")
     else:
-        print(f"\033[31m{result['result_msg']['USER_ID']}打卡失败！\033[01m")
+        print(f"\033[31m打卡失败！\033[01m")
 
     message_push(arg, result)
 
