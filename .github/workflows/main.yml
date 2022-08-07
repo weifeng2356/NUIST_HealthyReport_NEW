@@ -1,6 +1,6 @@
 name: GitHub Actions Auto Health Report
 on:
-  # Run script on daily 9:30am
+  # Run script on daily 10:30am
   schedule:
     - cron: '30 2 * * *'
   workflow_dispatch:

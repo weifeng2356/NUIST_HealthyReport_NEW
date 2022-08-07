@@ -16,7 +16,8 @@ import json
 
 def login(sess, uname, pwd):
     login_url = 'https://authserver.nuist.edu.cn/authserver/login?service=http%3A%2F%2Fi.nuist.edu.cn%2Fqljfwapp%2Fsys%2FlwNuistHealthInfoDailyClock%2Findex.do%23%2FhealthClock'
-    r = sess.get(login_url, timeout=5)
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.124 Safari/537.36 Edg/10'}
+    r = sess.get(login_url, timeout=5, headers=headers)
     htmlTextOri = r.text
     html = BeautifulSoup(htmlTextOri, 'lxml')
     pwdEncryptSalt = html.find(id='pwdEncryptSalt')['value']
@@ -37,6 +38,8 @@ def login(sess, uname, pwd):
                      }
     r = sess.get(
         "https://authserver.nuist.edu.cn/authserver/checkNeedCaptcha.htl?username=" + uname)
+    global captcha
+    captcha = 'CAPTCHA is not required'
     if r.text == '{"isNeed":true}':
         print("CAPTCHA required")
         print("Initializing OCR...")
@@ -50,13 +53,17 @@ def login(sess, uname, pwd):
         captcha_text = sdk.predict(image_bytes=res.content)
         print("CAPTCHA:", captcha_text)
         personal_info["captcha"] = captcha_text
-        global captcha
         captcha = captcha_text
         print("Logging in...")
-    login_response = sess.post(login_url, personal_info)
+    login_response = sess.post(login_url, personal_info, headers=headers)
     login_response.encoding = 'utf-8'
-    if re.search("学院", login_response.text):
-        print("\033[32m登陆成功!\033[01m")
+    if re.search("请稍等", login_response.text):
+        while re.search("请稍等", login_response.text):
+            login_response = sess.post(login_url, personal_info, headers=headers)
+            time = 0
+            time += 1
+            if time == 10:
+                raise
     elif re.search("院", login_response.text):
         print("\033[32m登陆成功!\033[01m")
     else:
@@ -65,19 +72,35 @@ def login(sess, uname, pwd):
 
 
 def get_header(sess, cookie_url):
-    cookie_response = sess.get(cookie_url)
-    weu = requests.utils.dict_from_cookiejar(cookie_response.cookies)['_WEU']
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.124 Safari/537.36 Edg/10'}
+    cookie_response = sess.get(cookie_url,headers=headers)
+    if re.search('{"', cookie_response.text):
+        weu = requests.utils.dict_from_cookiejar(cookie_response.request._cookies)['_WEU']
+    else:
+        while re.search("请稍等", cookie_response.text):
+            cookie_response = sess.get(cookie_url)
+            if re.search('{"', cookie_response.text):
+                weu = requests.utils.dict_from_cookiejar(cookie_response.request._cookies)['_WEU']
+            time = 0
+            time += 1
+            if time == 10:
+                raise
     cookie = requests.utils.dict_from_cookiejar(sess.cookies)
 
     header = {'Referer': 'http://i.nuist.edu.cn/qljfwapp/sys/lwNuistHealthInfoDailyClock/index.do#/healthClock',
-              'Cookie': '_WEU=' + weu + '; MOD_AUTH_CAS=' + cookie['MOD_AUTH_CAS'] + ';'}
+              'Cookie': '_WEU=' + weu + '; MOD_AUTH_CAS=' + cookie['MOD_AUTH_CAS'] + ';', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.124 Safari/537.36 Edg/10'}
     return header
 
 
 def get_info(sess, header):
     info_url = 'http://i.nuist.edu.cn/qljfwapp/sys/lwNuistHealthInfoDailyClock/modules/healthClock/getMyDailyReportDatas.do'
-    info_response = sess.post(
-        info_url, data={'pageSize': '10', 'pageNumber': '1'}, headers=header)
+    info_response = sess.post(info_url, data={'pageSize': '10', 'pageNumber': '1'}, headers=header)
+    while re.search("请稍等", info_response.text):
+        info_response = sess.post(info_url, data={'pageSize': '10', 'pageNumber': '1'}, headers=header)
+        time = 0
+        time += 1
+        if time == 10:
+            raise
     return info_response
 
 
@@ -89,18 +112,25 @@ def report(sess):
         if info.status_code == 403:
             raise
     except:
-        cookie_url2 = 'http://i.nuist.edu.cn/qljfwapp/sys/lwpub/api/getServerTime.do'
+        cookie_url2 = 'http://i.nuist.edu.cn/qljfwapp/sys/lwpub/common/changeAppRole/lwNuistHealthInfoDailyClock/bbb0c6744f624f23864ced95d1852bf3.do'
         header = get_header(sess, cookie_url2)
         info = get_info(sess, header)
 
-    if info.status_code == 200:
+    if re.search("请稍等", info.text):
+        while re.search("请稍等", info.text):
+            info = get_info(sess, header)
+            time = 0
+            time += 1
+            if time == 10:
+                raise
+    elif re.search("getMyDailyReportDatas", info.text):
         print('\033[32m获取前一日信息成功！\033[01m')
     else:
         print("\033[31m获取信息失败！\033[01m")
         raise
-    info.encoding = 'utf-8'
-    raw_info = re.search('"rows":\[\{(.*?)}', info.text).group(1)
-    raw_info = raw_info.split(',')
+    rinfo = info.text
+    json_info = json.loads(rinfo)
+    raw_info =json_info['datas']['getMyDailyReportDatas']['rows'][0]
     wid_generate_url = 'http://i.nuist.edu.cn/qljfwapp/sys/lwNuistHealthInfoDailyClock/modules/healthClock/T_HEALTH_DAILY_SETTING_QUERY.do'
     wid_get_data = {'pageNumber': 1,}
     wid_get_url = 'http://i.nuist.edu.cn/qljfwapp/sys/lwNuistHealthInfoDailyClock/modules/healthClock/getMyTodayReportWid.do'
@@ -111,22 +141,13 @@ def report(sess):
     if wid_se == None:
         wid =''
     else:
-        wid_raw=wid_se.group()
-        wid=wid_raw[6:38]
-    post_key = ['BY6', 'BY5', 'BY4', 'BY3', 'TODAY_ISOLATE_CONDITION', 'BY2', 'BY1', 'TODAY_CONDITION', 'BY2_DISPLAY', 'TODAY_BODY_CONDITION', 'TODAY_HEALTH_CODE_DISPLAY', 'CONTACT_HISTORY', 'TODAY_HEALTH_CODE', 'BY4_DISPLAY', 'TODAY_TARRY_CONDITION_DISPLAY', 'BY3_DISPLAY', 'PHONE_NUMBER', 'BY14', 'BY15', 'BY12', 'BY13', 'BY18', 'BY19', 'CHECKED_DISPLAY', 'BY16', 'BY17', 'TODAY_TEMPERATURE', 'CZRQ', 'BY10', 'BY11', 'BY8_DISPLAY', 'TODAY_TARRY_CONDITION', 'CLOCK_SITUATION', 'TODAY_NAT_CONDITION',
-                'TODAY_VACCINE_CONDITION_DISPLAY', 'DEPT_NAME', 'CONTACT_HISTORY_DISPLAY', 'CZR', 'TODAY_CONDITION_DISPLAY', 'BY1_DISPLAY', 'TODAY_SITUATION_DISPLAY', 'CZZXM', 'BY20', 'TODAY_ISOLATE_CONDITION_DISPLAY', 'TODAY_VACCINE_CONDITION', 'TODAY_NAT_CONDITION_DISPLAY', 'USER_ID', 'FILL_TIME', 'BY10_DISPLAY', 'DEPT_CODE', 'TODAY_BODY_CONDITION_DISPLAY', 'DEPT_CODE_DISPLAY', 'CHECKED', 'NEED_CHECKIN_DATE', 'CREATED_AT', 'TODAY_SITUATION', 'USER_NAME', 'BY7', 'BY8', 'BY9', 'BY11_DISPLAY']
+        wid = wid_se
+#         wid_raw=wid_se.group()
+#         wid=wid_raw[6:38]
     utc_dt = datetime.utcnow().replace(tzinfo=timezone.utc)
     now = utc_dt.astimezone(timezone(timedelta(hours=8)))
-    post_info = {}
-    for info in raw_info:
-        key_value = info.split(':', 1)
-        key = key_value[0].strip('"')
-        val = key_value[1].strip('"')
-        if key in post_key:
-            if val == 'null':
-                post_info[key] = ''
-            else:
-                post_info[key] = val
+    post_info = raw_info
+
     post_info['CREATED_AT'] = now.strftime("%Y-%m-%d %H:%M:%S")
     post_info['CZRQ'] = now.strftime("%Y-%m-%d %H:%M:%S")
     post_info['FILL_TIME'] = now.strftime(
@@ -140,7 +161,7 @@ def report(sess):
         print("今日无WID，系统会自动分配")
         pushwid='今日无编号，系统会自动分配'
     post_info['TODAY_TEMPERATURE'] = str(
-        random.randint(355, 365) / 10).ljust(3, '0')[:4]
+        random.randint(360, 370) / 10).ljust(3, '0')[:4]
 
     report_url = 'http://i.nuist.edu.cn/qljfwapp/sys/lwNuistHealthInfoDailyClock/modules/healthClock/T_HEALTH_DAILY_INFO_SAVE.do'
     report_response = sess.post(report_url, data=post_info, headers=header)
