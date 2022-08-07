@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 from __future__ import print_function
-from unittest import result
 import requests
 import time
 from bs4 import BeautifulSoup
@@ -9,7 +8,6 @@ import execjs
 import os
 import re
 import random
-import hashlib
 import argparse
 import json
 
@@ -65,9 +63,9 @@ def login(sess, uname, pwd):
             if time == 10:
                 raise
     elif re.search("院", login_response.text):
-        print("\033[32m登陆成功!\033[01m")
+        print("\033[32m登陆成功!\033[0m")
     else:
-        print("\033[31m登陆失败!请检查一卡通号和密码。\033[01m")
+        print("\033[31m登陆失败!请检查一卡通号和密码。\033[0m")
         raise
 
 
@@ -124,9 +122,9 @@ def report(sess):
             if time == 10:
                 raise
     elif re.search("getMyDailyReportDatas", info.text):
-        print('\033[32m获取前一日信息成功！\033[01m')
+        print('\033[32m获取前一日信息成功！\033[0m')
     else:
-        print("\033[31m获取信息失败！\033[01m")
+        print("\033[31m获取信息失败！\033[0m")
         raise
     rinfo = info.text
     json_info = json.loads(rinfo)
@@ -142,8 +140,8 @@ def report(sess):
         wid =''
     else:
         wid = wid_se
-#         wid_raw=wid_se.group()
-#         wid=wid_raw[6:38]
+        wid_raw=wid_se.group()
+        wid=wid_raw[6:38]
     utc_dt = datetime.utcnow().replace(tzinfo=timezone.utc)
     now = utc_dt.astimezone(timezone(timedelta(hours=8)))
     post_info = raw_info
@@ -252,7 +250,7 @@ def main():
         password = os.environ['PASSWORD']
 
     if username == None or username == "" or password == None or password == "":
-        print(f"\033[31m请正确填写账号密码(当前模式为{mode})\033[01m")
+        print(f"\033[31m请正确填写账号密码(当前模式为{mode})\033[0m")
         exit(0)
 
     sess = requests.session()
@@ -262,9 +260,9 @@ def main():
     del arg.password
 
     if result['result_code'] == 200:
-        print(f"\033[32m打卡成功！\033[01m")
+        print("\033[32m打卡成功！\033[0m")
     else:
-        print(f"\033[31m打卡失败！\033[01m")
+        print("\033[31m打卡失败！\033[0m")
 
     message_push(arg, result)
 
